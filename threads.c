@@ -83,8 +83,9 @@ struct Params
 void *reader(void *p)
 {
 	/*читаем построчно и забиваем в очередь*/
-	printf("READER started\n");
 	struct Params* params = (struct Params*) p;
+	pthread_mutex_lock(&params->mutex);
+	printf("READER started\n");
 	FILE * fo = fopen("numbers.txt", "rt");
 	void* curr;
 	if(!fo)
@@ -93,22 +94,22 @@ void *reader(void *p)
    	{
 		curr = (void*) calloc(25, sizeof(char));
 		int cnt = 0;
-		pthread_mutex_lock(&params->mutex);
+		//pthread_mutex_lock(&params->mutex);
 		while (1) //feof всегда false=(((
 		{
-			if (fgets(curr, 25, fo) != NULL)
-			{
+			if (fgets(curr, 25, fo) != NULL) {
 				putQueueArray(&params->q, curr);
 				cnt++;
-		        	//printf("strokaRead- %s\n", (char*)curr);
+		        printf("strokaRead- %s\n", (char*)curr);
 			}
-			else
-			{
+			else {
 			    params->strCnt = cnt;
 				break;
 			}
 		}
-		pthread_mutex_unlock(&params->mutex);
+		for (int i = 0; i < WORK_CNT; i++)
+            pthread_cond_signal(&params->condvar);
+        pthread_mutex_unlock(&params->mutex);
 	}
 	//free(curr);
 	fclose(fo);
@@ -118,28 +119,34 @@ void *worker(void *p)
 {
 	/*разбиваем строку и суммируем*/
 	struct Params* params = (struct Params*) p;
+	pthread_mutex_lock(&params->mutex);
+    pthread_cond_wait(&params->condvar, &params->mutex);
 	void* tmp;
 	char* str;
-	getQueueArray(&params->q, &tmp);
-	str = (char*)tmp;
-	int* sum = (int*)calloc(3, sizeof(int));
-	*sum = 0;
-	printf("strWorking- %s\n", str);
+	if (isEmptyQueueArray(&params->q)) {
+	    getQueueArray(&params->q, &tmp);
+	    str = (char*)tmp;
+	    int* sum = (int*)calloc(3, sizeof(int));
+	    *sum = 0;
+	    printf("strWorking- %s\n", str);
 	
-	int i = 0;
-	while (str[i] != '\n')
-	{
-		//printf("0sum = %i\n", sum);
+	    int i = 0;
+	    while (str[i] != '\n')
+	    {
+		    //printf("0sum = %i\n", sum);
 
-		if (str[i] != ' ')
-		{
-			*sum += str[i] - '0';
-			//printf("CURR = %c\n", str[i]);
-		}
-		i++;
-	}
-	putQueueArray(&params->resultStr, (void*)sum); 
-    printf("0sum = %i\n", *sum);
+		    if (str[i] != ' ')
+		    {
+			    *sum += str[i] - '0';
+			    //printf("CURR = %c\n", str[i]);
+		    }
+		    i++;
+	    }
+	    putQueueArray(&params->resultStr, (void*)sum);
+	    printf("0sum = %i\n", *sum);
+	} 
+	pthread_cond_signal(&params->condvar);
+	pthread_mutex_unlock(&params->mutex);
 }
 
 void *writer(void *p)
@@ -147,12 +154,15 @@ void *writer(void *p)
 	/*суммиуем суммы строк*/
 	printf("WRITER started\n");
 	struct Params* params = (struct Params*) p;
+	pthread_mutex_lock(&params->mutex);
+	pthread_cond_wait(&params->condvar,&params->mutex);
 	while (isEmptyQueueArray(&params->resultStr)) {
 	    void* s = (void*)calloc(3, sizeof(int));
 	    getQueueArray(&params->resultStr, &s);
 	    params->total += *(int*)s;   
 	    printf("writerSumStr= %i\n", params->total);
 	}
+	pthread_mutex_unlock(&params->mutex);
 	FILE * fo = fopen("result.txt", "wt");
         if(!fo)
             printf("Error open result.txt\n");

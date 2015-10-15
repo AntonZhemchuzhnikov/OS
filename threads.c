@@ -68,13 +68,16 @@ int isEmptyQueueArray(QueueArray *F) {
 
 /////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////// ОСВОБОЖДАТЬ ПАМЯТЬ!!!!!
+
 struct Params
 {
-  pthread_mutex_t mutex;
-  pthread_cond_t condvar;
-  int resultStr;
-  int total;
-  QueueArray q;
+    pthread_mutex_t mutex;
+    pthread_cond_t condvar;
+    int total;
+    QueueArray q;
+    QueueArray resultStr;
+    int strCnt;
 };
 
 void *reader(void *p)
@@ -83,24 +86,31 @@ void *reader(void *p)
 	printf("READER started\n");
 	struct Params* params = (struct Params*) p;
 	FILE * fo = fopen("numbers.txt", "rt");
+	void* curr;
 	if(!fo)
         	printf("Error open numbers.txt\n");
-    	else
+    else
    	{
-		char* curr = (char*) calloc(25, sizeof(char));
+		curr = (void*) calloc(25, sizeof(char));
+		int cnt = 0;
+		pthread_mutex_lock(&params->mutex);
 		while (1) //feof всегда false=(((
 		{
 			if (fgets(curr, 25, fo) != NULL)
 			{
 				putQueueArray(&params->q, curr);
-		        	//printf("strokaRead- %s\n", curr);
+				cnt++;
+		        	//printf("strokaRead- %s\n", (char*)curr);
 			}
 			else
 			{
+			    params->strCnt = cnt;
 				break;
 			}
 		}
+		pthread_mutex_unlock(&params->mutex);
 	}
+	//free(curr);
 	fclose(fo);
 }
 
@@ -108,9 +118,12 @@ void *worker(void *p)
 {
 	/*разбиваем строку и суммируем*/
 	struct Params* params = (struct Params*) p;
+	void* tmp;
 	char* str;
-	getQueueArray(&params->q, &str);
-	int sum = 0;
+	getQueueArray(&params->q, &tmp);
+	str = (char*)tmp;
+	int* sum = (int*)calloc(3, sizeof(int));
+	*sum = 0;
 	printf("strWorking- %s\n", str);
 	
 	int i = 0;
@@ -120,13 +133,13 @@ void *worker(void *p)
 
 		if (str[i] != ' ')
 		{
-			sum += str[i] - '0';
+			*sum += str[i] - '0';
 			//printf("CURR = %c\n", str[i]);
 		}
 		i++;
 	}
-	params->resultStr = sum;
-	//printf("tmpSum = %i\n", sum);
+	putQueueArray(&params->resultStr, (void*)sum); 
+    printf("0sum = %i\n", *sum);
 }
 
 void *writer(void *p)
@@ -134,42 +147,46 @@ void *writer(void *p)
 	/*суммиуем суммы строк*/
 	printf("WRITER started\n");
 	struct Params* params = (struct Params*) p;
+	while (isEmptyQueueArray(&params->resultStr)) {
+	    void* s = (void*)calloc(3, sizeof(int));
+	    getQueueArray(&params->resultStr, &s);
+	    params->total += *(int*)s;   
+	    printf("writerSumStr= %i\n", params->total);
+	}
 	FILE * fo = fopen("result.txt", "wt");
         if(!fo)
-                printf("Error open result.txt\n");
+            printf("Error open result.txt\n");
         else
-        {
-		//fwrite(&params->total, sizeof(int),1, fo );
-	}
+		    fwrite(&params->total, sizeof(int),1, fo );
+		fclose(fo);
 }
 
 int main()
 {
-	/*читается строка rider-ом, забивается в очередь, ее забирает worker, 
-	считает	и забивает в resultStr, которую прибавляет к total writer*/
 	printf("Program started!\n");
 	struct Params params;
 	pthread_mutex_init(&params.mutex, NULL);
 	pthread_cond_init(&params.condvar, NULL);
 	params.total = 0;
-	params.resultStr = 0;
 	initQueueArray(&params.q);
+	initQueueArray(&params.resultStr);
+	params.strCnt = 0;
 
 	pthread_t reader1;
 	pthread_create(&reader1, NULL, reader, &params);
 	pthread_join(reader1, NULL);
 	
 	pthread_t workers[WORK_CNT];
-	for (int i = 0; i < 1; i++) ////////////////////////////////////
+	for (int i = 0; i < WORK_CNT; i++)
 	{	
 		printf("WORKER %i started!\n", i);
 		pthread_create(&workers[i], NULL, worker, &params);
-        	pthread_join(workers[i], NULL);
+        pthread_join(workers[i], NULL);
 	}
 
-	//pthread_t writer1;
-       // pthread_create(&writer1, NULL, writer, &params);
-       // pthread_join(writer1, NULL);
+	pthread_t writer1;
+        pthread_create(&writer1, NULL, writer, &params);
+        pthread_join(writer1, NULL);
 
 
 	pthread_mutex_destroy(&params.mutex); 

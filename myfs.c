@@ -6,6 +6,7 @@
 // http://www.cs.cmu.edu/~./fp/courses/15213-s07/lectures/15-filesys/index.html
 
 #define FUSE_USE_VERSION  26
+#defint NAME_LENGTH 20
 
 #include <fuse.h>
 #include <stdio.h>
@@ -15,16 +16,18 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+
+//static void *_init(struct fuse_conn_info * conn);
+//static int _release(const char *path, struct fuse_file_info *fi);
 static int _getattr(const char *path, struct stat *stbuf);
 static int _readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
 static int _open(const char *path, struct fuse_file_info *fi);
-static int _release(const char *path, struct fuse_file_info *fi);
 static int _read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info * fi);
-static void *_init(struct fuse_conn_info * conn);
 static void _destroy(void *a);
 static int _truncate(const char *path, off_t size);
 static int _create(const char *path, mode_t mode, struct fuse_file_info *fi);
 static int _write(const char *path, const char *content, size_t size, off_t offset, struct fuse_file_info *fi);
+static int _mkdir(const char *path, mode_t mode, struct fuse_file_info *fi); 
 
 static struct fuse_operations oper = {
     .readdir = _readdir,
@@ -33,27 +36,36 @@ static struct fuse_operations oper = {
     .read = _read,
     .write = _write,
     .truncate = _truncate,
-    .release = _release,
     .flush = NULL,
     .getattr = _getattr,
     .destroy = _destroy,
-    .init = _init
+    .mkdir 	= _mkdir
+     //.init = _init,
+    //.release = _release,
 };
 
+// структура данных
+typedef struct data_header {
+	char name[NAME_LENGTH];
+    int start; // индекс начального сектора
+	int size; // количество секторов
+} data_header;
+
 int main(int argc, char *argv[]) {
-
-
+    
+    
     return fuse_main(argc, argv, &oper, NULL);
 }
 
-static void *_init(struct fuse_conn_info * conn) {
-    /* 
-      Initialize filesystem
-      ...
-    */
+/*static void *_init(struct fuse_conn_info * conn) {
     printf("Filesystem has been initialized!\n");
     return NULL;
 }
+
+static int _release(const char *path, struct fuse_file_info * fi) {
+    printf("release: %s\n", path);
+    return 0;
+}*/
 
 static void _destroy(void *a) {
     /*
@@ -109,14 +121,6 @@ static int _open(const char *path, struct fuse_file_info * fi) {
     return 0;
 }
 
-static int _release(const char *path, struct fuse_file_info * fi) {
-    printf("release: %s\n", path);
-    /*
-      Unlock file
-      ...
-    */
-    return 0;
-}
 
 static int _read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info * fi) {
     printf("read: %s\n", path);

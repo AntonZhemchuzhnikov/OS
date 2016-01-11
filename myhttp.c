@@ -130,10 +130,10 @@ void respond(int n) {
         printf("%s", mesg);
         reqline[0] = strtok(mesg, " \t\n");
         if (strncmp(reqline[0], "GET\0", 4)==0) {
-            reqline[1] = strtok (NULL, " \t");
-            reqline[2] = strtok (NULL, " \t\n");
+            reqline[1] = strtok(NULL, " \t");
+            reqline[2] = strtok(NULL, " \t\n");
             if (strncmp(reqline[2], "HTTP/1.0", 8)!=0 && strncmp(reqline[2], "HTTP/1.1", 8)!=0)
-                write(clients[n], "HTTP/1.0 400 Bad Request\n", 25);
+                write(clients[n], "400: Bad Request\n", 25);
             else {
                 if (strncmp(reqline[1], "/\0", 2)==0)
                     reqline[1] = "/index.html";        //так как не указан файл, то будет открыт index.html
@@ -144,17 +144,18 @@ void respond(int n) {
 
                 if ((fd=open(path, O_RDONLY))!=-1)    // файл найден
                 {
-                    send(clients[n], "HTTP/1.0 200 OK\n\n", 17, 0);
+                    send(clients[n], "200: OK\n\n", 17, 0);
                     while ((bytes_read=read(fd, data_to_send, BYTES))>0)
                         write (clients[n], data_to_send, bytes_read);
                 }
-                else    write(clients[n], "HTTP/1.0 404 Not Found\n", 23); // файл не найден
+                else    
+                    write(clients[n], "404: Not Found\n", 23); // файл не найден
             }
         }
     }
 
     //  Закрытие сокета
-    shutdown(clients[n], SHUT_RDWR);         //All further send and recieve operations are DISABLED...
+    shutdown(clients[n], SHUT_RDWR);
     close(clients[n]);
     clients[n]=-1;
 }

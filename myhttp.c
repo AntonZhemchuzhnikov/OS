@@ -36,14 +36,14 @@ int main(int argc, char* argv[])
     //Парсинг аргументов командной строки
     while ((c = getopt(argc, argv, "p:r:")) != -1)
         switch (c) {
-            case 'r':
+            case 'r': // корневая папка
                 ROOT = malloc(strlen(optarg));
                 strcpy(ROOT,optarg);
                 break;
-            case 'p':
+            case 'p': //порт
                 strcpy(PORT,optarg);
                 break;
-            case '?':
+            case '?': 
                 fprintf(stderr,"Wrong arguments given!!!\n");
                 exit(1);
             default:
@@ -65,12 +65,11 @@ int main(int argc, char* argv[])
         if (clients[slot]<0)
             error ("accept() error");
         else {
-            if (fork()==0) {
-                respond(slot);
+            if (fork()==0) { // создание нового процесса клиента
+                respond(slot); 
                 exit(0);
             }
         }
-
         while (clients[slot]!=-1) slot = (slot+1)%CONNMAX;
     }
     return 0;
@@ -152,6 +151,7 @@ void respond(int n) {
                     write(clients[n], "404: Not Found\n", 23); // файл не найден
             }
         }
+        printf("-------------------------------------\n");
     }
 
     //  Закрытие сокета

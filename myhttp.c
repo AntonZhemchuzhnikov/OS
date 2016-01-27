@@ -1,4 +1,3 @@
-
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
@@ -19,6 +18,7 @@ int listenfd, clients[CONNMAX];
 void error(char *);
 void startServer(char *);
 void respond(int);
+int clntcnt = 0;
 
 int main(int argc, char* argv[])
 {
@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
     socklen_t addrlen;
     char c;    
     
-    //по умолчанию PATH = ~/ , PORT=10000
+    //по умолчанию PATH = ~/ , PORT=9999
     char PORT[6];
     ROOT = getenv("PWD");
     strcpy(PORT,"9999");
@@ -44,33 +44,33 @@ int main(int argc, char* argv[])
                 strcpy(PORT,optarg);
                 break;
             case '?': 
-                fprintf(stderr,"Wrong arguments given!!!\n");
+                printf(stderr,"Wrong arguments given!!!\n");
                 exit(1);
             default:
                 exit(1);
         }
     
-    printf("Server started at port no. %s%s%s with root directory as %s%s%s\n","\033[92m",PORT,"\033[0m","\033[92m",ROOT,"\033[0m");
-    // Присваиваем всем элементам -1 (нет подключенных клиентов)
+    printf("Server started at port: %s with root directory: %s\n", PORT, ROOT);
+    
     int i;
     for (i=0; i<CONNMAX; i++)
         clients[i]=-1;
     startServer(PORT);
 
-    // создаем подключения
     while (1) {
         addrlen = sizeof(clientaddr);
-        clients[slot] = accept (listenfd, (struct sockaddr *) &clientaddr, &addrlen);
+        clients[slot] = accept(listenfd, (struct sockaddr *) &clientaddr, &addrlen);
 
         if (clients[slot]<0)
             error ("accept() error");
         else {
-            if (fork()==0) { // создание нового процесса клиента
+            if (fork()==0) {
                 respond(slot); 
                 exit(0);
             }
         }
-        while (clients[slot]!=-1) slot = (slot+1)%CONNMAX;
+        while (clients[slot]!=-1) 
+          slot = ++slot % CONNMAX;
     }
     return 0;
 }
@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
 void startServer(char *port) {
     struct addrinfo hints, *res, *p;
 
-    // getaddrinfo for host
+    // получениие инф. хоста
     memset (&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
@@ -88,11 +88,13 @@ void startServer(char *port) {
         perror ("getaddrinfo() error");
         exit(1);
     }
-    // socket and bind
+    // socket и bind
     for (p = res; p!=NULL; p=p->ai_next) {
-        listenfd = socket (p->ai_family, p->ai_socktype, 0);
-        if (listenfd == -1) continue;
-        if (bind(listenfd, p->ai_addr, p->ai_addrlen) == 0) break;
+        listenfd = socket(p->ai_family, p->ai_socktype, 0);
+        if (listenfd != -1) 
+          break;
+        if (bind(listenfd, p->ai_addr, p->ai_addrlen) == 0) 
+          break;
     }
     if (p==NULL) {
         perror ("socket() or bind()");
@@ -126,7 +128,9 @@ void respond(int n) {
         fprintf(stderr,"Client disconnected upexpectedly.\n");
     else    // получение сообщения
     {
-        printf("%s", mesg);
+        clntcnt++;
+        printf("Clients Count: %i\n", clntcnt);
+        printf("Message: %s", mesg);
         reqline[0] = strtok(mesg, " \t\n");
         if (strncmp(reqline[0], "GET\0", 4)==0) {
             reqline[1] = strtok(NULL, " \t");
@@ -154,8 +158,9 @@ void respond(int n) {
         printf("-------------------------------------\n");
     }
 
-    //  Закрытие сокета
+    //Закрытие сокета
     shutdown(clients[n], SHUT_RDWR);
     close(clients[n]);
     clients[n]=-1;
+    clntcnt--;
 }
